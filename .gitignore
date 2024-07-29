@@ -1,1 +1,3 @@
-downloader.py
+data-processing/downloader.py
+data-processing/images
+data-processing/labels
