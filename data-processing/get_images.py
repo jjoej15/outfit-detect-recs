@@ -1,5 +1,6 @@
 import pandas as pd
 import os
+from concurrent.futures import ProcessPoolExecutor
 
 
 label_item_map = {
@@ -31,7 +32,6 @@ def create_id_list(item_name, label_name, df, n):
                 break
 
             elif id not in used_ids:
-                # num_used += 1
                 used_ids[id] = True
                 list_file.write(f'train/{id}\n')
 
@@ -51,7 +51,13 @@ def create_id_list(item_name, label_name, df, n):
                     annotations_str = ""
                     for i in range(len(data["LabelNames"])):
                         # YOLO format: {class} {x_center} {y_center} {width} {height}
-                        annotations_str += f'{label_item_map[data["LabelNames"][i][1]][1]} {(data["XMins"][i][1] + data["XMaxes"][i][1])/2} {(data["YMins"][i][1] + data["YMaxes"][i][1])/2} {-data["XMins"][i][1] + data["XMaxes"][i][1]} {-data["YMins"][i][1] + data["YMaxes"][i][1]}\n'
+                        class_id = label_item_map[data["LabelNames"][i][1]][1]
+                        x_center = (data["XMins"][i][1] + data["XMaxes"][i][1]) / 2
+                        y_center = (data["YMins"][i][1] + data["YMaxes"][i][1]) / 2
+                        width = -data["XMins"][i][1] + data["XMaxes"][i][1]
+                        height = -data["YMins"][i][1] + data["YMaxes"][i][1]
+
+                        annotations_str += f'{class_id} {x_center} {y_center} {width} {height}\n'
 
                     annotation_file.write(annotations_str)
 
@@ -71,11 +77,12 @@ def main():
     if not os.path.exists('id-lists'):
         os.makedirs('id-lists')
 
-    df = pd.read_csv('oidv6-train-annotations-bbox.csv')
+    df = pd.read_csv('oidv6-train-annotations-bbox.csv', usecols=['ImageID', 'LabelName', "XMin", "XMax", "YMin", "YMax"])
 
-    for key in label_item_map:
-        print(f'Creating {label_item_map[key][0]} id list and annotations')
-        create_id_list(label_item_map[key][0], key, df, 50)
+    with ProcessPoolExecutor() as executor:
+        for key in label_item_map:
+            print(f'Creating {label_item_map[key][0]} id list and annotations')
+            executor.submit(create_id_list, label_item_map[key][0], key, df, 50)
 
     for key in label_item_map:
         print(f'Downloading {label_item_map[key][0]} images')
