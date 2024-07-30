@@ -1,6 +1,7 @@
 import pandas as pd
 import os
 from concurrent.futures import ProcessPoolExecutor
+from multiprocessing import Manager
 
 
 label_item_map = {
@@ -16,10 +17,10 @@ label_item_map = {
     "/m/09j5n": ("footwear", 8)
 }
 
-used_ids = {}
+# used_ids = {}
 
 
-def create_id_list(item_name, label_name, df, n):
+def create_id_list(item_name, label_name, df, n, used_ids):
     open(f'id-lists/{item_name}_ID_LIST.txt', 'w').close()
 
     ids_under_label = df[df['LabelName'] == label_name]['ImageID']
@@ -79,10 +80,14 @@ def main():
 
     df = pd.read_csv('oidv6-train-annotations-bbox.csv', usecols=['ImageID', 'LabelName', "XMin", "XMax", "YMin", "YMax"])
 
-    with ProcessPoolExecutor() as executor:
-        for key in label_item_map:
-            print(f'Creating {label_item_map[key][0]} id list and annotations')
-            executor.submit(create_id_list, label_item_map[key][0], key, df, 50)
+
+    with Manager() as manager:
+        used_ids = manager.dict()
+
+        with ProcessPoolExecutor() as executor:
+            for key in label_item_map:
+                print(f'Creating {label_item_map[key][0]} id list and annotations')
+                executor.submit(create_id_list, label_item_map[key][0], key, df, 400, used_ids)
 
     for key in label_item_map:
         print(f'Downloading {label_item_map[key][0]} images')
