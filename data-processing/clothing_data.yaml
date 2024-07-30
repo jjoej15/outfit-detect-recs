@@ -1,0 +1,15 @@
+path: C:\Users\jetpa\Documents\code\outfit-detect-recs\data-processing\data
+train: images/train
+val: images/validation
+
+# Classes
+names:
+  0: shirt
+  1: jeans
+  2: dress
+  3: skirt
+  4: shorts
+  5: hat
+  6: boots
+  7: belt
+  8: footwear

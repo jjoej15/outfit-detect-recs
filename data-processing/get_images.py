@@ -31,41 +31,51 @@ def create_id_list(item_name, label_name, df, n):
                 break
 
             elif id not in used_ids:
-                num_used += 1
+                # num_used += 1
                 used_ids[id] = True
                 list_file.write(f'train/{id}\n')
 
                 # Creating annotation for image if it doesn't already exist
-                if not os.path.exists(f'labels/{id}.txt'):
-                    with open(f'labels/{id}.txt', 'w') as annotation_file:
-                        pieces_in_img = df[(df['ImageID'] == id) & (df['LabelName'].isin(label_item_map.keys()))]
-                        
-                        data = {
-                            "LabelNames": list(pieces_in_img['LabelName'].items()), 
-                            "XMins": list(pieces_in_img['XMin'].items()), 
-                            "XMaxes": list(pieces_in_img['XMax'].items()),
-                            "YMins": list(pieces_in_img['YMin'].items()),
-                            "YMaxes": list(pieces_in_img['YMax'].items()),  
-                        }
+                file_path = f'data/labels/validation/{id}.txt' if num_used % 10 == 0 else f'data/labels/train/{id}.txt'
+                with open(file_path, 'w') as annotation_file:
+                    pieces_in_img = df[(df['ImageID'] == id) & (df['LabelName'].isin(label_item_map.keys()))]
+                    
+                    data = {
+                        "LabelNames": list(pieces_in_img['LabelName'].items()), 
+                        "XMins": list(pieces_in_img['XMin'].items()), 
+                        "XMaxes": list(pieces_in_img['XMax'].items()),
+                        "YMins": list(pieces_in_img['YMin'].items()),
+                        "YMaxes": list(pieces_in_img['YMax'].items()),  
+                    }
 
-                        annotations_str = ""
-                        for i in range(len(data["LabelNames"])):
-                            # YOLO format: {class} {x_center} {y_center} {width} {height}
-                            annotations_str += f'{label_item_map[data["LabelNames"][i][1]][1]} {(data["XMins"][i][1] + data["XMaxes"][i][1])/2} {(data["YMins"][i][1] + data["YMaxes"][i][1])/2} {-data["XMins"][i][1] + data["XMaxes"][i][1]} {-data["YMins"][i][1] + data["YMaxes"][i][1]}\n'
+                    annotations_str = ""
+                    for i in range(len(data["LabelNames"])):
+                        # YOLO format: {class} {x_center} {y_center} {width} {height}
+                        annotations_str += f'{label_item_map[data["LabelNames"][i][1]][1]} {(data["XMins"][i][1] + data["XMaxes"][i][1])/2} {(data["YMins"][i][1] + data["YMaxes"][i][1])/2} {-data["XMins"][i][1] + data["XMaxes"][i][1]} {-data["YMins"][i][1] + data["YMaxes"][i][1]}\n'
 
-                        annotation_file.write(annotations_str)
+                    annotation_file.write(annotations_str)
+
+                    num_used += 1
 
 
 def download_images(item_name):
-    os.system(f'python downloader.py id-lists/{item_name}_ID_LIST.txt --download_folder=images/{item_name} --num_processes=5')
+    os.system(f'python downloader.py id-lists/{item_name}_ID_LIST.txt --num_processes=5')
 
 
 def main():
+    if not os.path.exists('data'):
+        os.makedirs('data')
+        os.makedirs('data/labels')
+        os.makedirs('data/labels/train')
+        os.makedirs('data/labels/validation')
+    if not os.path.exists('id-lists'):
+        os.makedirs('id-lists')
+
     df = pd.read_csv('oidv6-train-annotations-bbox.csv')
 
     for key in label_item_map:
         print(f'Creating {label_item_map[key][0]} id list and annotations')
-        create_id_list(label_item_map[key][0], key, df, 400)
+        create_id_list(label_item_map[key][0], key, df, 50)
 
     for key in label_item_map:
         print(f'Downloading {label_item_map[key][0]} images')
