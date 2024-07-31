@@ -17,8 +17,6 @@ label_item_map = {
     "/m/09j5n": ("footwear", 8)
 }
 
-# used_ids = {}
-
 
 def create_id_list(item_name, label_name, df, n, used_ids):
     open(f'id-lists/{item_name}_ID_LIST.txt', 'w').close()
@@ -33,6 +31,7 @@ def create_id_list(item_name, label_name, df, n, used_ids):
                 break
 
             elif id not in used_ids:
+                # print(num_used, item_name, n)
                 used_ids[id] = True
                 list_file.write(f'train/{id}\n')
 
@@ -62,14 +61,32 @@ def create_id_list(item_name, label_name, df, n, used_ids):
 
                     annotation_file.write(annotations_str)
 
-                    num_used += 1
+                num_used += 1
 
 
 def download_images(item_name):
     os.system(f'python downloader.py id-lists/{item_name}_ID_LIST.txt --num_processes=5')
 
 
+def get_used_ids(id_dict):
+    image_dir_path = 'data/images'
+    num_files = 0
+
+    for dir in os.listdir(image_dir_path):
+        files_in_dir = os.listdir(image_dir_path + '/' + dir)
+
+        for file in files_in_dir:
+            id_dict[file[:-4]] = True
+            num_files += 1
+
+    print(f'{num_files} images found in current dataset.')
+
+
 def main():
+    adding_to_set = input("data directory detected. Are you adding to already existing dataset? (Y/N) ").capitalize() == 'Y' if os.path.exists('data') else False
+    num_adding = int(input("How many images per class do you want to add to dataset? "))
+    print(f'Adding {num_adding} images to each class in dataset.' if adding_to_set else f'Creating new dataset with {num_adding} images/class')
+
     if not os.path.exists('data'):
         os.makedirs('data')
         os.makedirs('data/labels')
@@ -78,16 +95,17 @@ def main():
     if not os.path.exists('id-lists'):
         os.makedirs('id-lists')
 
+    print("Converting bbox csv file to pandas dataframe. . .")
     df = pd.read_csv('oidv6-train-annotations-bbox.csv', usecols=['ImageID', 'LabelName', "XMin", "XMax", "YMin", "YMax"])
-
 
     with Manager() as manager:
         used_ids = manager.dict()
-
+        if adding_to_set : get_used_ids(used_ids)
+       
         with ProcessPoolExecutor() as executor:
             for key in label_item_map:
                 print(f'Creating {label_item_map[key][0]} id list and annotations')
-                executor.submit(create_id_list, label_item_map[key][0], key, df, 400, used_ids)
+                executor.submit(create_id_list, label_item_map[key][0], key, df, num_adding, used_ids)
 
     for key in label_item_map:
         print(f'Downloading {label_item_map[key][0]} images')
