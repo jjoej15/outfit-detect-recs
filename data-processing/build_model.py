@@ -1,11 +1,17 @@
 from ultralytics import YOLO
+# from ultralytics.utils.benchmarks import benchmark
+
+
+def build_model():
+    # Building new model from scratch
+    model = YOLO("yolov8n.yaml") 
+
+    # Train model
+    model.train(data="clothing_data.yaml", epochs=200, batch=.75, patience=50)
+
 
 if __name__ == '__main__':
-    # Load model
-    model = YOLO("yolov8n.yaml")  # build a new model from scratch
+    build_model()
 
-    # Use model
-    model.train(data="clothing_data.yaml", epochs=1, batch=4)  # train the model
-    metrics = model.val()  # evaluate model performance on the validation set
-    # results = model("https://ultralytics.com/images/bus.jpg")  # predict on an image
-    # path = model.export(format="onnx")  # export the model to ONNX format
+    # YOLO("train/weights/best.pt").export(format="onnx")
+    # benchmark(model="train/weights/best.pt", data="clothing_data.yaml", imgsz=640, half=False, device=0)
