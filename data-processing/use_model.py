@@ -1,12 +1,41 @@
-from ultralytics import YOLO
 import cv2
 import supervision as sv
-import time
+
+from ultralytics import YOLO
+
 from PIL import Image
 import numpy as np
 import scipy
-# import scipy.misc
 import scipy.cluster
+
+from openai import OpenAI
+from config import OPENAI_API_KEY
+
+
+clothing_groups = {
+    "short sleeve top": "top", 
+    "long sleeve top": "top", 
+    "short sleeve outwear": "top", 
+    "long sleeve outwear": "top", 
+    "vest": "top",
+    "shorts": "bottom",
+    "trousers": "bottom",
+    "skirt": "bottom",
+    "short sleeve dress": "dress",
+    "long sleeve dress": "dress",
+    "vest dress": "dress",
+    "sling dress": "dress",
+    "sling": "other"
+}
+
+
+def get_detections(arr: np.ndarray):
+    model = YOLO("train/weights/best.pt")
+    result = model(arr, agnostic_nms=True)[0]
+    detections = sv.Detections.from_ultralytics(result)
+    detections = detections[detections.confidence >= .4]
+
+    return detections
 
 
 # Code for this function was written by Peter Hansen at https://stackoverflow.com/a/3244061 but slightly modified for my use case
@@ -15,9 +44,8 @@ def get_object_color(frame: np.ndarray):
     img = Image.fromarray(frame)
     img = img.resize((150, 150)) # Resizing to reduce time
     arr = np.asarray(img)
-    shape = arr.shape
     # Reshaping to 2D array where row represents pixel and col represents r/g/b value
-    arr = arr.reshape(shape[0] * shape[1], 3).astype(float) 
+    arr = arr.reshape(arr.shape[0] * arr.shape[1], 3).astype(float) 
 
     codes, _ = scipy.cluster.vq.kmeans(arr, 5) # Finding most dominant colors
     vecs, _ = scipy.cluster.vq.vq(arr, codes) # Assigning each pixel to one of the dominant colors
@@ -25,7 +53,7 @@ def get_object_color(frame: np.ndarray):
 
     index_max = np.argmax(counts) # Find most frequent
     peak = codes[index_max] # Getting RGB value of most frequent
-    return [int(val) for val in peak]
+    return f'({int(peak[0])}, {int(peak[1])}, {int(peak[2])})'
 
 
 def get_isolated_object(bbox, frame):
@@ -36,14 +64,7 @@ def get_isolated_object(bbox, frame):
     return isolated_object
 
 
-def save_img(class_name: str, img: np.ndarray):
-    img = Image.fromarray(img)
-    img.save(f"{class_name}.jpg")
-
-
-def use_camera():
-    model = YOLO("train/weights/best.pt")
-
+def detect_outfit_camera():
     box_annotator = sv.BoundingBoxAnnotator(
         thickness=2
     )
@@ -52,21 +73,12 @@ def use_camera():
     vid = cv2.VideoCapture(1)
     vid.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
     vid.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
-    frame_count = 0
-    # t0 = time.time()
     detections_dict = {}
 
     while True: 
         _, frame = vid.read() 
-        frame_count += 1
-        # if frame_count == 125:
-        #     break
-        # hsvImage = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
 
-        result = model(frame, agnostic_nms=True)[0]
-
-        detections = sv.Detections.from_ultralytics(result)
-        detections = detections[detections.confidence >= .4]
+        detections = get_detections(frame)
 
         labels = []
         for bbox, _, confidence, _, _, class_dict in detections:
@@ -76,8 +88,6 @@ def use_camera():
             
             if class_name not in detections_dict:
                 isolated_object = get_isolated_object(bbox, frame)
-                # img = Image.fromarray(isolated_object)
-                # detections_dict[class_name] = [confidence, img.copy(), 0]
                 detections_dict[class_name] = {
                     'conf': confidence,
                     'img': isolated_object,
@@ -86,22 +96,10 @@ def use_camera():
 
             elif confidence > detections_dict[class_name]['conf']:
                 isolated_object = get_isolated_object(bbox, frame)
-                # img = Image.fromarray(isolated_object)
-                # detections_dict[class_name] = [confidence, isolated_object, detections_dict[class_name]]
                 detections_dict[class_name]['conf'] = confidence
                 detections_dict[class_name]['img'] = isolated_object
 
             detections_dict[class_name]['detection count'] += 1
-        
-        # labels = [f'{class_dict['class_name']} {confidence:0.2f}' for _, _, confidence, _, _, class_dict in detections]
-
-        # bboxes = [f'{bbox}:{class_dict['class_name']}' for bbox, _, _, _, _, class_dict in detections]
-        # print(f'BBOXS: {bboxes}')
-        # bboxs: [x1 y1 x2 y2]
-# Detections(xyxy=array([[     205.26,      372.57,      1237.2,
-# 720]], dtype=float32), mask=None, confidence=array([    0.73218], dtype=float32), class_id=array([1]), tracker_id=None, data={'class_name': array(['short sleeve top'], dtype='<U16')})
-
-# [(array([     218.03,       308.2,      1236.6,         720], dtype=float32), None, 0.831849, 1, None, {'class_name': 'short sleeve top'})]       
 
         try:
             frame = box_annotator.annotate(
@@ -116,38 +114,114 @@ def use_camera():
 
             cv2.imshow('frame', frame) 
 
+            if cv2.waitKey(1) & 0xFF == ord('q'): 
+                break
+
         except:
             break
-
-        # finally: 
-        if cv2.waitKey(1) & 0xFF == ord('q'): 
-            break
-
+        
     vid.release() 
 
     cv2.destroyAllWindows()     
 
-    objects_detected = sorted(
-        [(
+    objects_detected = [
+        (
             class_name, 
             detections_dict[class_name]['conf'], 
             detections_dict[class_name]['img'], 
             detections_dict[class_name]['detection count']
         ) 
-        for class_name in detections_dict], 
-        key=lambda c : c[3], 
-        reverse=True
+        for class_name in detections_dict
+    ]
+
+    objects_detected = sorted(
+        objects_detected, 
+        key=lambda o : o[3], # Sorting by number of frames objects were detected
+        reverse=True # Sorting from highest to lowest
     )
 
-    for obj_name, conf, img, count in objects_detected[:3]:
-        print(obj_name, conf, count)
+    user_is_wearing = []
+    detected_groups = {}
+    for obj_name, _, img, _ in objects_detected:
+        if clothing_groups[obj_name] not in detected_groups:
+            color = get_object_color(img)
+            detected_groups[clothing_groups[obj_name]] = True
+            user_is_wearing.append({'class name': obj_name, 'color': color})
 
-        color = get_object_color(img)
+    return user_is_wearing
 
-        print(f'Color: {color}')
-        # save_img(obj_name, img)
+
+def detect_outfit_pic(file_path):
+    try:
+        img = Image.open(file_path)
+        arr = np.asarray(img)
+
+        detections = get_detections(arr)
+
+        user_is_wearing = []
+        for bbox, _, _, _, _, class_dict in detections:
+            isolated_object = get_isolated_object(bbox, arr)
+
+            color = get_object_color(isolated_object)
+            user_is_wearing.append({'class name': class_dict['class_name'], 'color': color})
+
+        return user_is_wearing
+    
+    except FileNotFoundError:
+        print("File path not found.")
+
+    
+
+def get_recs(outfit):
+    client = OpenAI(api_key=OPENAI_API_KEY)
+
+    system_prompt = "You are an expert in fashion and recommend styling tips to others. " \
+                    "When I ask you for recommendations for the outfit that I'm wearing, follow these guidelines:\n\n" \
+                    "- Style: Bullet points. The header of the bullet point should be a 1-3 word summary of the information" \
+                    "in the rest of the bullet point. Min. of 3 points but Max. of 5 points.\n" \
+                    "- Tone: Professional.\n" \
+                    "- Consider both the pieces and their corresponding colors in you answer. " \
+                    "Try to give specific advice regarding the outfit given, instead of general styling tips.\n" \
+                    "- Do not mention any specific RGB values in your response\n" \
+                    "- When given an RGB value, don't assume that it's the exact color of the clothing piece. " \
+                    "Instead, assume it's a color somewhat similar to the given RGB value.\n" \
+                    "- Don't assume that the color of the clothing is monotone. Instead, only assume that the given color " \
+                    "is the dominant color of the piece.\n" \
+                    "Don't assume any specific style of given outfit pieces nor any specific fit." \
+                    "The only information that's safe to assume is the information given to you."
+    
+    user_prompt = f"I am wearing {outfit[0]['class name']} in the color of RGB value {outfit[0]['color']}"
+    for i in range(1, len(outfit)):
+        user_prompt += f" and a {outfit[i]['class name']} in the color of RGB value {outfit[i]['color']}"
+    user_prompt += ". Can you provide some recommendations for my outfit?"
+    
+    completion = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ],
+        max_tokens=256,
+        temperature=0.5
+    )
+
+    print(user_prompt, '\n')
+
+    return completion
 
 
 if __name__ == '__main__':
-    use_camera()
+    outfit = detect_outfit_pic('nettspend.jpg')
+    
+    if len(outfit) > 0:
+        recs = get_recs(outfit)
+        print(recs.choices[0].message.content)
+    else:
+        print("No clothing detected.")
+
+
+    
+
+    
+
 

@@ -1,12 +1,12 @@
-data-processing/data
-data-processing/token.txt
-data-processing/train/confusion_matrix_normalized.png
-data-processing/train/confusion_matrix.png
-data-processing/train/F1_curve.png
+# Results from model training
+data-processing/train/*.png
 data-processing/train/labels_correlogram.jpg
-data-processing/train/P_curve.png
-data-processing/train/PR_curve.png
-data-processing/train/R_curve.png
 data-processing/train/results.csv
-data-processing/train/results.png
+
+# Secrets
 data-processing/config.py
+
+# Misc.
+data-processing/test.py
+data-processing/__pycache__
+data-processing/*.jpg
