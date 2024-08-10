@@ -29,8 +29,7 @@ clothing_groups = {
 }
 
 
-def get_detections(arr: np.ndarray):
-    model = YOLO("train/weights/best.pt")
+def get_detections(arr: np.ndarray, model: YOLO):
     result = model(arr, agnostic_nms=True)[0]
     detections = sv.Detections.from_ultralytics(result)
     detections = detections[detections.confidence >= .4]
@@ -65,6 +64,8 @@ def get_isolated_object(bbox, frame):
 
 
 def detect_outfit_camera():
+    model = YOLO("train/weights/best.pt")
+
     box_annotator = sv.BoundingBoxAnnotator(
         thickness=2
     )
@@ -73,12 +74,12 @@ def detect_outfit_camera():
     vid = cv2.VideoCapture(1)
     vid.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
     vid.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
-    detections_dict = {}
 
+    detections_dict = {}
     while True: 
         _, frame = vid.read() 
-
-        detections = get_detections(frame)
+        
+        detections = get_detections(frame, model)
 
         labels = []
         for bbox, _, confidence, _, _, class_dict in detections:
@@ -100,6 +101,7 @@ def detect_outfit_camera():
                 detections_dict[class_name]['img'] = isolated_object
 
             detections_dict[class_name]['detection count'] += 1
+            if detections_dict[class_name]['detection count'] == 500 : break
 
         try:
             frame = box_annotator.annotate(
@@ -153,10 +155,11 @@ def detect_outfit_camera():
 
 def detect_outfit_pic(file_path):
     try:
+        model = YOLO("train/weights/best.pt")
         img = Image.open(file_path)
         arr = np.asarray(img)
 
-        detections = get_detections(arr)
+        detections = get_detections(arr, model)
 
         user_is_wearing = []
         for bbox, _, _, _, _, class_dict in detections:
@@ -187,7 +190,7 @@ def get_recs(outfit):
                     "Instead, assume it's a color somewhat similar to the given RGB value.\n" \
                     "- Don't assume that the color of the clothing is monotone. Instead, only assume that the given color " \
                     "is the dominant color of the piece.\n" \
-                    "Don't assume any specific style of given outfit pieces nor any specific fit." \
+                    "- Don't assume any specific style of given outfit pieces nor any specific fit." \
                     "The only information that's safe to assume is the information given to you."
     
     user_prompt = f"I am wearing {outfit[0]['class name']} in the color of RGB value {outfit[0]['color']}"
@@ -202,7 +205,7 @@ def get_recs(outfit):
             {"role": "user", "content": user_prompt}
         ],
         max_tokens=256,
-        temperature=0.5
+        temperature=0.6
     )
 
     print(user_prompt, '\n')
@@ -211,7 +214,8 @@ def get_recs(outfit):
 
 
 if __name__ == '__main__':
-    outfit = detect_outfit_pic('nettspend.jpg')
+    outfit = detect_outfit_camera()
+    # outfit = detect_outfit_pic('nettspend.jpg')
     
     if len(outfit) > 0:
         recs = get_recs(outfit)
