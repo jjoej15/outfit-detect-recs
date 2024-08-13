@@ -5,8 +5,11 @@ data-processing/train/results.csv
 
 # Secrets
 data-processing/config.py
+*.env
 
 # Misc.
 data-processing/test.py
 data-processing/__pycache__
 data-processing/*.jpg
+data-processing/train3
+back-end/app/best.pt
