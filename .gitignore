@@ -13,3 +13,4 @@ data-processing/__pycache__
 data-processing/*.jpg
 data-processing/train3
 back-end/app/best.pt
+back-end/app/__pycache__

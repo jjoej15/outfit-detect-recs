@@ -1,9 +1,12 @@
 import os
 from dotenv import load_dotenv
+from contextlib import asynccontextmanager
+import asyncio
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.websockets import WebSocketState
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+# from pydantic import BaseModel
 import uvicorn
 
 import numpy as np
@@ -17,9 +20,17 @@ import supervision as sv
 
 from openai import OpenAI
 
-import asyncio
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global model
+    model = YOLO("best.pt")
+    dummy_frame = np.zeros((640, 480, 3), dtype=np.uint8)
+    get_detections(dummy_frame)
+    
+    yield
+    del model
 
-app = FastAPI()
+app = FastAPI(lifespan=lifespan)
 load_dotenv()
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 
@@ -37,25 +48,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-clothing_groups = {
-    "short sleeve top": "top", 
-    "long sleeve top": "top", 
-    "short sleeve outwear": "top", 
-    "long sleeve outwear": "top", 
-    "vest": "top",
-    "shorts": "bottom",
-    "trousers": "bottom",
-    "skirt": "bottom",
-    "short sleeve dress": "dress",
-    "long sleeve dress": "dress",
-    "vest dress": "dress",
-    "sling dress": "dress",
-    "sling": "other"
-}
+# fastapi run main.py --port 8080
 
-
-class ImageBytes(BaseModel):
-    bytes: bytes
+# class ImageBytes(BaseModel):
+#     bytes: bytes
 
 
 # Code for this function was written by Peter Hansen at https://stackoverflow.com/a/3244061 but slightly modified for my use case
@@ -76,7 +72,7 @@ def get_object_color(frame: np.ndarray):
     return f'({int(peak[0])}, {int(peak[1])}, {int(peak[2])})'
 
 
-def get_detections(arr: np.ndarray, model: YOLO):
+def get_detections(arr: np.ndarray):
     result = model(arr, agnostic_nms=True, verbose=False)[0]
     detections = sv.Detections.from_ultralytics(result)
     detections = detections[detections.confidence >= .4]
@@ -93,7 +89,7 @@ def get_isolated_object(bbox, frame):
 
 
 async def use_model_webcam(websocket: WebSocket, queue: asyncio.Queue, detections_dict: dict):
-    model = YOLO("best.pt")
+    # model = YOLO("best.pt")
 
     box_annotator = sv.BoundingBoxAnnotator(
         thickness=2
@@ -105,7 +101,7 @@ async def use_model_webcam(websocket: WebSocket, queue: asyncio.Queue, detection
         arr = np.frombuffer(bytes, dtype=np.uint8)
         frame = cv2.imdecode(arr, 1)
 
-        detections = get_detections(frame, model)
+        detections = get_detections(frame)
 
         labels = []
         for bbox, _, confidence, _, _, class_dict in detections:
@@ -127,8 +123,12 @@ async def use_model_webcam(websocket: WebSocket, queue: asyncio.Queue, detection
                 detections_dict[class_name]['img'] = isolated_object
 
             detections_dict[class_name]['detection count'] += 1
-            if detections_dict[class_name]['detection count'] == 500 : break
-
+            if detections_dict[class_name]['detection count'] == 25:
+                await websocket.close()
+    
+            
+            # print(class_name, detections_dict[class_name]['detection count'])
+        
         frame = box_annotator.annotate(
             scene=frame, 
             detections=detections
@@ -161,12 +161,34 @@ async def use_camera_detection(websocket: WebSocket):
     try:
         while True:
             await receive(websocket, queue)
-
+            
     except WebSocketDisconnect:
         detect_task.cancel()
-        await websocket.close()
+        try:
+            await websocket.close()
+        except RuntimeError as e:
+            if str(e) == "Unexpected ASGI message 'websocket.close', after sending 'websocket.close' or response already completed.":
+                pass
+            else:
+                print(e)
 
     # finally:
+        # clothing_groups = {
+        #     "short sleeve top": "top", 
+        #     "long sleeve top": "top", 
+        #     "short sleeve outwear": "top", 
+        #     "long sleeve outwear": "top", 
+        #     "vest": "top",
+        #     "shorts": "bottom",
+        #     "trousers": "bottom",
+        #     "skirt": "bottom",
+        #     "short sleeve dress": "dress",
+        #     "long sleeve dress": "dress",
+        #     "vest dress": "dress",
+        #     "sling dress": "dress",
+        #     "sling": "other"
+        # }
+
     #     objects_detected = [
     #         (
     #             class_name, 
@@ -192,7 +214,6 @@ async def use_camera_detection(websocket: WebSocket):
     #             user_is_wearing.append({'class name': obj_name, 'color': color})
 
     #     return user_is_wearing
-
 
 if __name__ == '__main__':
     uvicorn.run(app, port=8080, host='0.0.0.0')
