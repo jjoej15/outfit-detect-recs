@@ -88,9 +88,101 @@ def get_isolated_object(bbox, frame):
     return isolated_object
 
 
-async def use_model_webcam(websocket: WebSocket, queue: asyncio.Queue, detections_dict: dict):
-    # model = YOLO("best.pt")
+def get_gpt_response(outfit: list[dict]):
+    client = OpenAI(api_key=OPENAI_API_KEY)
 
+    system_prompt = "You are an expert in fashion and recommend styling tips to others. " \
+                    "When I ask you for recommendations for the outfit that I'm wearing, follow these guidelines:\n\n" \
+                    "- Style: Bullet points. The header of the bullet point should be a 1-3 word summary of the information" \
+                    "in the rest of the bullet point. Min. of 3 points but Max. of 5 points.\n" \
+                    "- Tone: Professional.\n" \
+                    "- Consider both the pieces and their corresponding colors in you answer. " \
+                    "Try to give specific advice regarding the outfit given, instead of general styling tips.\n" \
+                    "- Do not mention any specific RGB values in your response\n" \
+                    "- When given an RGB value, don't assume that it's the exact color of the clothing piece. " \
+                    "Instead, assume it's a color somewhat similar to the given RGB value.\n" \
+                    "- Don't assume that the color of the clothing is monotone. Instead, only assume that the given color " \
+                    "is the dominant color of the piece.\n" \
+                    "- Don't assume any specific style of given outfit pieces nor any specific fit." \
+                    "The only information that's safe to assume is the information given to you."
+    
+    user_prompt = f"I am wearing {outfit[0]['class name']} in the color of RGB value {outfit[0]['color']}"
+    for i in range(1, len(outfit)):
+        user_prompt += f" and a {outfit[i]['class name']} in the color of RGB value {outfit[i]['color']}"
+    user_prompt += ". Can you provide some recommendations for my outfit?"
+    
+    completion = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ],
+        max_tokens=256,
+        temperature=0.6
+    )
+
+    # print(user_prompt, '\n')
+
+    return completion
+
+
+def get_recs(detections_dict):
+    clothing_groups = {
+        "short sleeve top": "top", 
+        "long sleeve top": "top", 
+        "short sleeve outwear": "top", 
+        "long sleeve outwear": "top", 
+        "vest": "top",
+        "shorts": "bottom",
+        "trousers": "bottom",
+        "skirt": "bottom",
+        "short sleeve dress": "dress",
+        "long sleeve dress": "dress",
+        "vest dress": "dress",
+        "sling dress": "dress",
+        "sling": "other"
+    }
+
+    objects_detected = [
+        (
+            class_name, 
+            detections_dict[class_name]['conf'], 
+            detections_dict[class_name]['img'], 
+            detections_dict[class_name]['detection count']
+        ) 
+        for class_name in detections_dict
+    ]
+
+    objects_detected = sorted(
+        objects_detected, 
+        key=lambda o : o[3], # Sorting by number of frames objects were detected
+        reverse=True # Sorting from highest to lowest
+    )
+
+    outfit = []
+    detected_groups = {}
+    for obj_name, _, img, _ in objects_detected:
+        group = clothing_groups[obj_name]
+        if group not in detected_groups:
+            if group == 'top' or group == 'bottom':
+                detected_groups['dress'] = True
+            elif group == 'dress':
+                detected_groups['top'] = True
+                detected_groups['bottom'] = True
+            detected_groups[group] = True
+
+            color = get_object_color(img)
+            outfit.append({'class name': obj_name, 'color': color})
+
+    if len(outfit) > 0:
+        recs = get_gpt_response(outfit)
+        return recs
+
+    else : return None
+
+
+async def use_model_webcam(websocket: WebSocket, queue: asyncio.Queue, detections_dict: dict):
+    socket_open = True
     box_annotator = sv.BoundingBoxAnnotator(
         thickness=2
     )
@@ -123,28 +215,43 @@ async def use_model_webcam(websocket: WebSocket, queue: asyncio.Queue, detection
                 detections_dict[class_name]['img'] = isolated_object
 
             detections_dict[class_name]['detection count'] += 1
-            if detections_dict[class_name]['detection count'] == 25:
-                await websocket.close()
-    
-            
-            # print(class_name, detections_dict[class_name]['detection count'])
-        
-        frame = box_annotator.annotate(
-            scene=frame, 
-            detections=detections
-        )
-        frame = label_annotator.annotate(
-            scene=frame,
-            detections=detections,
-            labels=labels
-        )
+            if detections_dict[class_name]['detection count'] >= 50:
+                if str(websocket.application_state) == "WebSocketState.CONNECTED":
+                    recs = get_recs(detections_dict)
+                    text = recs.choices[0].message.content if recs else "No outfit detected."
+                    # print(text)
+                    await websocket.send_text(text)
+                    # break
+                    # print("closing socket")
+                    # await websocket.close()
+                    # print("socket closed")
+                # else:
+                #     print(websocket.application_state)
+                # # await asyncio.sleep(100)
+                # await websocket.close()
+                socket_open = False
 
-        encoded_bytes = cv2.imencode('.jpg', frame)[1].tobytes()
-        await websocket.send_bytes(encoded_bytes)
+        if socket_open:
+            frame = box_annotator.annotate(
+                scene=frame, 
+                detections=detections
+            )
+            frame = label_annotator.annotate(
+                scene=frame,
+                detections=detections,
+                labels=labels
+            )
+
+            encoded_bytes = cv2.imencode('.jpg', frame)[1].tobytes()
+            
+            await websocket.send_bytes(encoded_bytes)
+            
+        else : break
 
 
 async def receive(websocket: WebSocket, queue: asyncio.Queue):
     bytes = await websocket.receive_bytes()
+    
     try:
         queue.put_nowait(bytes)
     except asyncio.QueueFull:
@@ -157,63 +264,30 @@ async def use_camera_detection(websocket: WebSocket):
     queue = asyncio.Queue(maxsize=10)
     detections_dict = {}
     detect_task = asyncio.create_task(use_model_webcam(websocket, queue, detections_dict))
-
+    common_errs = [
+        "Unexpected ASGI message 'websocket.close', after sending 'websocket.close' or response already completed.",
+        'Cannot call "send" once a close message has been sent.',
+        # 'Task exception was never retrieved',
+        'WebSocket is not connected. Need to call "accept" first.'
+    ]
     try:
         while True:
             await receive(websocket, queue)
             
     except WebSocketDisconnect:
         detect_task.cancel()
-        try:
-            await websocket.close()
+        try : await websocket.close()
+
         except RuntimeError as e:
-            if str(e) == "Unexpected ASGI message 'websocket.close', after sending 'websocket.close' or response already completed.":
-                pass
-            else:
-                print(e)
+            if str(e) in common_errs : pass
+            else : print("In WebSocketDisconnect exception block:", e)
 
-    # finally:
-        # clothing_groups = {
-        #     "short sleeve top": "top", 
-        #     "long sleeve top": "top", 
-        #     "short sleeve outwear": "top", 
-        #     "long sleeve outwear": "top", 
-        #     "vest": "top",
-        #     "shorts": "bottom",
-        #     "trousers": "bottom",
-        #     "skirt": "bottom",
-        #     "short sleeve dress": "dress",
-        #     "long sleeve dress": "dress",
-        #     "vest dress": "dress",
-        #     "sling dress": "dress",
-        #     "sling": "other"
-        # }
+    except RuntimeError as e:
+        if str(e) in common_errs : pass
+        else : print("In RuntimeError exception block:", e)
+        
 
-    #     objects_detected = [
-    #         (
-    #             class_name, 
-    #             detections_dict[class_name]['conf'], 
-    #             detections_dict[class_name]['img'], 
-    #             detections_dict[class_name]['detection count']
-    #         ) 
-    #         for class_name in detections_dict
-    #     ]
 
-    #     objects_detected = sorted(
-    #         objects_detected, 
-    #         key=lambda o : o[3], # Sorting by number of frames objects were detected
-    #         reverse=True # Sorting from highest to lowest
-    #     )
-
-    #     user_is_wearing = []
-    #     detected_groups = {}
-    #     for obj_name, _, img, _ in objects_detected:
-    #         if clothing_groups[obj_name] not in detected_groups:
-    #             color = get_object_color(img)
-    #             detected_groups[clothing_groups[obj_name]] = True
-    #             user_is_wearing.append({'class name': obj_name, 'color': color})
-
-    #     return user_is_wearing
 
 if __name__ == '__main__':
     uvicorn.run(app, port=8080, host='0.0.0.0')

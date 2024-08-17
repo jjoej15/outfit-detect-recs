@@ -2,17 +2,23 @@ import { useRef, useEffect, useState } from 'react';
 import PropTypes from 'prop-types';
  
 function VideoStream(props) {
-    const [vidDeviceId, setVidDeviceId] = [props.vidDeviceId, props.setVidDeviceId];
-     
+    const [vidDeviceId, setVidDeviceId, setRecText] = [props.vidDeviceId, props.setVidDeviceId, props.setRecText];
+    
     const canvasRef = useRef(null);
     const videoRef = useRef(null);
     const virtualCanvasRef = useRef(null);
-    const socket = new WebSocket("ws://localhost:8080/webcam/");
+    let socket;
     
     useEffect(() => { // Connecting to websocket and starting clothing detection
+        // setRecText(null)
+        if (socket) {
+            socket.close();
+            print("Closing already open socket")
+        } 
+
         const video = videoRef.current;
         const canvas = canvasRef.current;
-        // const socket = new WebSocket("ws://localhost:8080/webcam/");
+        socket = new WebSocket("ws://localhost:8080/webcam/");
         
         startDetections(video, canvas);
     }, [])
@@ -28,6 +34,7 @@ function VideoStream(props) {
     }
 
     const startDetections = (video, canvas) => {
+        
         let intervalId;
         let stream;
 
@@ -57,20 +64,29 @@ function VideoStream(props) {
                     ctx.drawImage(video, 0, 0);
                 
                     if (socket.readyState === socket.OPEN) virtualCanvas.toBlob((blob) => socket.send(blob), 'image/jpeg');
-                }, 70);                
+                }, 70); 
+
             } catch (e) {
                 if (e.message === "Could not start video source") {
-                    console.log(e.message)
-                    socket.close() 
+                    console.log(e.message);
+                    socket.close();
                 } else {
-                    console.log(e)
+                    console.log(e);
                 }
             }
 
         })
         
         socket.addEventListener('message', (m) => {
-            displayDetections(video, canvas, m.data);
+            // console.log(typeof m.data)
+            if (typeof m.data == "string") {
+                setRecText(m.data);
+                socket.close();
+
+            } else {
+                displayDetections(video, canvas, m.data);                
+            }
+
         })
 
         socket.addEventListener('close', async () => {
@@ -103,7 +119,8 @@ function VideoStream(props) {
 
 VideoStream.propTypes = {
     vidDeviceId: PropTypes.string,
-    setVidDeviceId: PropTypes.func
+    setVidDeviceId: PropTypes.func,
+    setRecText: PropTypes.func
 }
 
 

@@ -5,6 +5,7 @@ import './App.css'
 function App() {
   const [videoDevices, setVideoDevices] = useState([]);
   const [vidDeviceId, setVidDeviceId] = useState(null);
+  const [recText, setRecText] = useState();
 
   useEffect(() => { // Getting video devices
     const getDevices = async () => {
@@ -25,7 +26,8 @@ function App() {
   return (
     <div className='app'>
       {videoDevices && videoDevices.map((d) => <button type='button' key={d.deviceId} onClick={() => setVidDeviceId(d.deviceId)}>{d.label}</button>)}
-      {vidDeviceId && <VideoStream vidDeviceId={vidDeviceId} setVidDeviceId={setVidDeviceId}/>}      
+      {vidDeviceId && <VideoStream vidDeviceId={vidDeviceId} setVidDeviceId={setVidDeviceId} setRecText={setRecText}/>}  
+      {recText && <p>{recText}</p>}
     </div>
 
   );
