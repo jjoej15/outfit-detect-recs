@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState } from 'react';
+import { useRef, useEffect } from 'react';
 import PropTypes from 'prop-types';
  
 function VideoStream(props) {
@@ -13,7 +13,7 @@ function VideoStream(props) {
         // setRecText(null)
         if (socket) {
             socket.close();
-            print("Closing already open socket")
+            console.log("Closing already open socket")
         } 
 
         const video = videoRef.current;

@@ -1,33 +1,36 @@
-import { useState, useEffect } from 'react'
-import VideoStream from './components/VideoStream'
-import './App.css'
+import { useState, useEffect } from 'react';
+import UseCamera from './components/UseCamera';
+import UsePhoto from './components/UsePhoto';
+import githubLogo from './assets/github-mark.svg';
+import './css/App.css';
+
+// Favicon rgb val is (223, 52, 52)
 
 function App() {
-  const [videoDevices, setVideoDevices] = useState([]);
-  const [vidDeviceId, setVidDeviceId] = useState(null);
-  const [recText, setRecText] = useState();
-
-  useEffect(() => { // Getting video devices
-    const getDevices = async () => {
-      const devices = await navigator.mediaDevices.enumerateDevices();
-      let videoDevices = []
-      for (const device of devices) {
-          if (device.kind === 'videoinput' && device.deviceId) {
-              videoDevices.push({"deviceId": device.deviceId, "label": device.label});
-          }
-      }
-
-      setVideoDevices(videoDevices);       
-    }
-
-    getDevices();
-  }, []);
+  const [useCamera, setUseCamera] = useState(false);
+  const [usePhoto, setUsePhoto] = useState(false);
 
   return (
     <div className='app'>
-      {videoDevices && videoDevices.map((d) => <button type='button' key={d.deviceId} onClick={() => setVidDeviceId(d.deviceId)}>{d.label}</button>)}
-      {vidDeviceId && <VideoStream vidDeviceId={vidDeviceId} setVidDeviceId={setVidDeviceId} setRecText={setRecText}/>}  
-      {recText && <p>{recText}</p>}
+      {useCamera && <UseCamera />}
+      {usePhoto && <UsePhoto />}
+
+      {!useCamera && !usePhoto &&
+        <div className='home'>
+          <h1 className='app-title'>FitDetect</h1>
+          <h3 className='app-desc'>Outfit Detection/Recommendation Engine</h3>
+
+          <p className='credits'>Project by Joe Anderson <a href="https://github.com/jjoej15" target="_blank"><img src={githubLogo} className='github-logo' alt='github logo' /></a>. 
+          Source code located <a href="https://github.com/jjoej15/outfit-detect-recs" target="_blank">here</a>.</p>
+
+          <p className='app-details'>
+            Get recommendations for your outfit using your webcam or an uploaded photo.
+          </p>
+
+          <button className='btn' onClick={setUseCamera}>Use Camera</button>
+          <button className='btn' onClick={setUsePhoto}>Use Photo</button>
+        </div>
+      }
     </div>
 
   );
