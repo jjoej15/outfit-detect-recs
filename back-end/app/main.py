@@ -91,19 +91,21 @@ def get_isolated_object(bbox, frame):
 def get_gpt_response(outfit: list[dict]):
     client = OpenAI(api_key=OPENAI_API_KEY)
 
-    system_prompt = "You are an expert in fashion and recommend styling tips to others. " \
+    system_prompt = 'You are an expert in fashion and recommend styling tips to others. ' \
                     "When I ask you for recommendations for the outfit that I'm wearing, follow these guidelines:\n\n" \
-                    "- Style: Bullet points. The header of the bullet point should be a 1-3 word summary of the information" \
-                    "in the rest of the bullet point. Min. of 3 points but Max. of 5 points.\n" \
-                    "- Tone: Professional.\n" \
-                    "- Consider both the pieces and their corresponding colors in you answer. " \
-                    "Try to give specific advice regarding the outfit given, instead of general styling tips.\n" \
-                    "- Do not mention any specific RGB values in your response\n" \
+                    '- Style: Bullet points. The header of the bullet point should be a 1-3 word summary of the information ' \
+                    'in the rest of the bullet point. Min. of 3 points but Max. of 5 points. This text will be parsed, ' \
+                    'so make sure to always give an answer in this format:  "- **Bullet Point 1 Title**: Bullet point 1 text. ' \
+                    '- **Bullet Point 2 Title**: Bullet point 2 text." and so on.\n' \
+                    '- Tone: Professional.\n' \
+                    '- Consider both the pieces and their corresponding colors in you answer. ' \
+                    'Try to give specific advice regarding the outfit given, instead of general styling tips.\n' \
+                    '- Do not mention any specific RGB values in your response\n' \
                     "- When given an RGB value, don't assume that it's the exact color of the clothing piece. " \
                     "Instead, assume it's a color somewhat similar to the given RGB value.\n" \
                     "- Don't assume that the color of the clothing is monotone. Instead, only assume that the given color " \
                     "is the dominant color of the piece.\n" \
-                    "- Don't assume any specific style of given outfit pieces nor any specific fit." \
+                    "- Don't assume any specific style of given outfit pieces nor any specific fit. " \
                     "The only information that's safe to assume is the information given to you."
     
     user_prompt = f"I am wearing {outfit[0]['class name']} in the color of RGB value {outfit[0]['color']}"
@@ -215,20 +217,13 @@ async def use_model_webcam(websocket: WebSocket, queue: asyncio.Queue, detection
                 detections_dict[class_name]['img'] = isolated_object
 
             detections_dict[class_name]['detection count'] += 1
-            if detections_dict[class_name]['detection count'] >= 50:
+            if detections_dict[class_name]['detection count'] >= 25:
                 if str(websocket.application_state) == "WebSocketState.CONNECTED":
+                    await websocket.send_text("Detections completed.")
+
                     recs = get_recs(detections_dict)
                     text = recs.choices[0].message.content if recs else "No outfit detected."
-                    # print(text)
                     await websocket.send_text(text)
-                    # break
-                    # print("closing socket")
-                    # await websocket.close()
-                    # print("socket closed")
-                # else:
-                #     print(websocket.application_state)
-                # # await asyncio.sleep(100)
-                # await websocket.close()
                 socket_open = False
 
         if socket_open:
