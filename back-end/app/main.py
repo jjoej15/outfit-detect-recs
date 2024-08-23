@@ -6,7 +6,6 @@ import asyncio
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.websockets import WebSocketState
 from fastapi.middleware.cors import CORSMiddleware
-# from pydantic import BaseModel
 import uvicorn
 
 import numpy as np
@@ -49,10 +48,6 @@ app.add_middleware(
 )
 
 # fastapi run main.py --port 8080
-
-# class ImageBytes(BaseModel):
-#     bytes: bytes
-
 
 # Code for this function was written by Peter Hansen at https://stackoverflow.com/a/3244061 but slightly modified for my use case
 def get_object_color(frame: np.ndarray):

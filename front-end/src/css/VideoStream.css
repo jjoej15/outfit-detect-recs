@@ -1,0 +1,39 @@
+.canvas {
+    border-radius: 15px;
+}
+
+.loading {
+    border: 3px solid #EAF0F6;
+    border-radius: 50%;
+    border-top: 3px solid rgb(223, 52, 52);;
+    width: 20px;
+    height: 20px;
+    animation: spinner 1s linear infinite;
+    transform: translateY(-1px);
+}
+
+.process-status {
+    margin-top: 15px;
+    margin-bottom: 15px;
+    font-size: .95rem;
+    display: flex;
+    justify-content: center;
+    line-height: 100%;
+}
+
+.process-status p {
+    margin-left: 10px;
+    transform: translateY(2px);
+}
+
+.video-stream {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+/* Keyframes */
+@keyframes spinner {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}

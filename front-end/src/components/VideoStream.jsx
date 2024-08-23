@@ -1,24 +1,32 @@
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import PropTypes from 'prop-types';
- 
+import "../css/VideoStream.css" 
+
 function VideoStream(props) {
-    const [vidDeviceId, setVidDeviceId, setRecText] = [props.vidDeviceId, props.setVidDeviceId, props.setRecText];
-    
+    const [vidDeviceId, setVidDeviceId, setRecText, setCameraErr] = [
+        props.vidDeviceId, 
+        props.setVidDeviceId, 
+        props.setRecText, 
+        props.setCameraErr
+    ];
+
     const canvasRef = useRef(null);
     const videoRef = useRef(null);
     const virtualCanvasRef = useRef(null);
-    let socket;
+    const [displaying, setDisplaying] = useState(false);
+    const [detectionsCompleted, setDetectionsCompleted] = useState(false);
+    const socketRef = useRef(null);
     
     useEffect(() => { // Connecting to websocket and starting clothing detection
         // setRecText(null)
-        if (socket) {
-            socket.close();
+        if (socketRef.current) {
+            socketRef.current.close();
             console.log("Closing already open socket")
         } 
 
         const video = videoRef.current;
         const canvas = canvasRef.current;
-        socket = new WebSocket("ws://localhost:8080/webcam/");
+        socketRef.current = new WebSocket("ws://localhost:8080/webcam/");
         
         startDetections(video, canvas);
     }, [])
@@ -30,15 +38,15 @@ function VideoStream(props) {
 
         const frame = await createImageBitmap(imgBlob);
     
-        ctx.drawImage(frame, 0, 0)
+        ctx.drawImage(frame, 0, 0);
+        if (!displaying) setDisplaying(true);
     }
 
     const startDetections = (video, canvas) => {
-        
         let intervalId;
         let stream;
 
-        socket.addEventListener('open', async () => {
+        socketRef.current.addEventListener('open', async () => {
             try {
                 stream = await navigator.mediaDevices.getUserMedia({
                     audio: false, 
@@ -56,40 +64,56 @@ function VideoStream(props) {
                 canvas.height = video.videoHeight;
 
                 intervalId = setInterval(() => {
-                    const virtualCanvas = virtualCanvasRef.current;
-                    virtualCanvas.width = video.videoWidth;
-                    virtualCanvas.height = video.videoHeight;
+                    try {
+                        const virtualCanvas = virtualCanvasRef.current;
+                        virtualCanvas.width = video.videoWidth;
+                        virtualCanvas.height = video.videoHeight;
 
-                    const ctx = virtualCanvas.getContext('2d');
-                    ctx.drawImage(video, 0, 0);
-                
-                    if (socket.readyState === socket.OPEN) virtualCanvas.toBlob((blob) => socket.send(blob), 'image/jpeg');
+                        const ctx = virtualCanvas.getContext('2d');
+                        ctx.drawImage(video, 0, 0);
+                    
+                        if (socketRef.current.readyState === socketRef.current.OPEN) virtualCanvas.toBlob((blob) => socketRef.current.send(blob), 'image/jpeg');
+
+                    } catch (e) {
+                        if (e instanceof TypeError) {
+                            socketRef.current.close();
+                            setCameraErr(true);
+                            console.error(e)
+                            clearInterval(intervalId);
+                        } else {
+                            console.error(e)
+                        }
+                    }
                 }, 70); 
 
             } catch (e) {
                 if (e.message === "Could not start video source") {
                     console.log(e.message);
-                    socket.close();
+                    setCameraErr(true);
+                    socketRef.current.close();
                 } else {
+                    console.log('hi')
                     console.log(e);
                 }
             }
-
-        })
+        });
         
-        socket.addEventListener('message', (m) => {
-            // console.log(typeof m.data)
+        socketRef.current.addEventListener('message', (m) => {
             if (typeof m.data == "string") {
-                setRecText(m.data);
-                socket.close();
+                if (m.data === "Detections completed.") {
+                    setDetectionsCompleted(true);
+
+                } else {
+                    setRecText(m.data);
+                    socketRef.current.close();
+                }
 
             } else {
                 displayDetections(video, canvas, m.data);                
             }
+        });
 
-        })
-
-        socket.addEventListener('close', async () => {
+        socketRef.current.addEventListener('close', async () => {
             clearInterval(intervalId);
             video.pause();
             if (stream) {
@@ -102,16 +126,24 @@ function VideoStream(props) {
     };
 
     const endStream = () => {
-        socket.close();
+        socketRef.current.close();
         // setVidDeviceId(null);
     }
 
     return(
-        <div className="video-stream">
+        <div className="video-stream">            
             <video ref={videoRef} id="video" style={{display: "none"}} />
-            <canvas ref={canvasRef} className="canvas" />
+            {!detectionsCompleted && <canvas ref={canvasRef} className="canvas" />}
             <canvas ref={virtualCanvasRef} className='virtual-canvas' style={{display: "none"}} />
-            <button onClick={endStream}>Stop</button>
+
+            {displaying &&
+                <div className='process-status'>
+                    <div className="loading" />
+                    <p>{!detectionsCompleted ? "Detecting outfit" : "Getting Recommendations"}</p>
+                </div>    
+            }                
+
+            {displaying && !detectionsCompleted && <button className='btn' onClick={endStream}>Stop</button>}
         </div>
     );
 }
@@ -120,7 +152,8 @@ function VideoStream(props) {
 VideoStream.propTypes = {
     vidDeviceId: PropTypes.string,
     setVidDeviceId: PropTypes.func,
-    setRecText: PropTypes.func
+    setRecText: PropTypes.func,
+    setCameraErr: PropTypes.func
 }
 
 

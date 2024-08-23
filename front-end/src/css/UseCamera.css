@@ -4,6 +4,7 @@
     justify-content: center;
     flex-direction: column;
     overflow: hidden;
+    align-items: center;
 }
 
 .no-cam-container {
@@ -19,6 +20,10 @@
     text-align: center;
     align-items: center;
 
+}
+
+.no-cam-container p {
+    margin-bottom: 10px;
 }
 
 .circle-img {
@@ -53,4 +58,28 @@
     transition: background-color .25s;
     background-color: rgb(63, 63, 63);
     cursor: pointer;
+}
+
+.recs-header {
+    margin-bottom: 10px;
+}
+
+.recs-box {
+    background-color: white;
+    max-height: 75%;
+    width: 90%;
+    border-radius: 15px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding: 12.5px;
+    margin-bottom: 15px;
+}
+
+.recs-list {
+    list-style-type: none;
+    text-align: center;  
+}
+
+#home-btn {
+    background-color: rgb(223, 52, 52);
 }

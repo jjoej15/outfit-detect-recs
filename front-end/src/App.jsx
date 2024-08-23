@@ -12,7 +12,7 @@ function App() {
 
   return (
     <div className='app'>
-      {useCamera && <UseCamera />}
+      {useCamera && <UseCamera setUseCamera={setUseCamera} />}
       {usePhoto && <UsePhoto />}
 
       {!useCamera && !usePhoto &&
@@ -25,10 +25,11 @@ function App() {
 
           <p className='app-details'>
             Get recommendations for your outfit using your webcam or an uploaded photo.
+            Leveraging deep learning, computer vision, and LLMs to improve your style.
           </p>
 
-          <button className='btn' onClick={setUseCamera}>Use Camera</button>
-          <button className='btn' onClick={setUsePhoto}>Use Photo</button>
+          <button className='btn' onClick={() => setUseCamera(true)}>Use Camera</button>
+          <button className='btn' onClick={() => setUsePhoto(true)}>Use Photo</button>
         </div>
       }
     </div>
