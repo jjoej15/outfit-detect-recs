@@ -37,10 +37,11 @@ function UseCamera(props) {
         }
     
         getDevices();
-      }, []);
+    }, []);
 
 
     const [displayRecs, setDisplayRecs] = useState();
+
     useEffect(() => { // Parsing recText and setting recs
         if (recText) {
             const bulletPoints = recText.split('- **').splice(1);
@@ -161,8 +162,8 @@ function UseCamera(props) {
                 </div>
             }
 
-            {recs && <button className='btn' onClick={startOver}>Use Camera Again</button>}         
-            {recs && <button className='btn' onClick={() => setUseCamera(false)}>Home</button>}
+            {recs && <button className='btn' id="use-camera-btn" onClick={startOver}>Use Camera Again</button>}         
+            {recs && <button className='btn' id="use-camera-btn" onClick={() => setUseCamera(false)}>Home</button>}
                
         </div>
     );

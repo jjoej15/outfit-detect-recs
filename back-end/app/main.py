@@ -2,8 +2,9 @@ import os
 from dotenv import load_dotenv
 from contextlib import asynccontextmanager
 import asyncio
+from io import BytesIO
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, File
 from fastapi.websockets import WebSocketState
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
@@ -21,6 +22,7 @@ from openai import OpenAI
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Loading model and using it on startup ensures app works efficiently
     global model
     model = YOLO("best.pt")
     dummy_frame = np.zeros((640, 480, 3), dtype=np.uint8)
@@ -47,7 +49,22 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# fastapi run main.py --port 8080
+clothing_groups = {
+    "short sleeve top": "top", 
+    "long sleeve top": "top", 
+    "short sleeve outwear": "top", 
+    "long sleeve outwear": "top", 
+    "vest": "top",
+    "shorts": "bottom",
+    "trousers": "bottom",
+    "skirt": "bottom",
+    "short sleeve dress": "dress",
+    "long sleeve dress": "dress",
+    "vest dress": "dress",
+    "sling dress": "dress",
+    "sling": "other"
+}
+
 
 # Code for this function was written by Peter Hansen at https://stackoverflow.com/a/3244061 but slightly modified for my use case
 def get_object_color(frame: np.ndarray):
@@ -78,12 +95,13 @@ def get_detections(arr: np.ndarray):
 def get_isolated_object(bbox, frame):
     x1, y1, x2, y2 = bbox
     isolated_object = frame[int(y1):int(y2), int(x1):int(x2)]
-    # isolated_object = cv2.cvtColor(isolated_object, cv2.COLOR_BGR2RGB)
 
     return isolated_object
 
 
 def get_gpt_response(outfit: list[dict]):
+    if len(outfit) == 0 : return None
+
     client = OpenAI(api_key=OPENAI_API_KEY)
 
     system_prompt = 'You are an expert in fashion and recommend styling tips to others. ' \
@@ -118,28 +136,10 @@ def get_gpt_response(outfit: list[dict]):
         temperature=0.6
     )
 
-    # print(user_prompt, '\n')
-
     return completion
 
 
 def get_recs(detections_dict):
-    clothing_groups = {
-        "short sleeve top": "top", 
-        "long sleeve top": "top", 
-        "short sleeve outwear": "top", 
-        "long sleeve outwear": "top", 
-        "vest": "top",
-        "shorts": "bottom",
-        "trousers": "bottom",
-        "skirt": "bottom",
-        "short sleeve dress": "dress",
-        "long sleeve dress": "dress",
-        "vest dress": "dress",
-        "sling dress": "dress",
-        "sling": "other"
-    }
-
     objects_detected = [
         (
             class_name, 
@@ -171,11 +171,8 @@ def get_recs(detections_dict):
             color = get_object_color(img)
             outfit.append({'class name': obj_name, 'color': color})
 
-    if len(outfit) > 0:
-        recs = get_gpt_response(outfit)
-        return recs
-
-    else : return None
+    recs = get_gpt_response(outfit)
+    return recs
 
 
 async def use_model_webcam(websocket: WebSocket, queue: asyncio.Queue, detections_dict: dict):
@@ -212,12 +209,12 @@ async def use_model_webcam(websocket: WebSocket, queue: asyncio.Queue, detection
                 detections_dict[class_name]['img'] = isolated_object
 
             detections_dict[class_name]['detection count'] += 1
-            if detections_dict[class_name]['detection count'] >= 25:
+            if detections_dict[class_name]['detection count'] >= 300:
                 if str(websocket.application_state) == "WebSocketState.CONNECTED":
                     await websocket.send_text("Detections completed.")
 
                     recs = get_recs(detections_dict)
-                    text = recs.choices[0].message.content if recs else "No outfit detected."
+                    text = recs.choices[0].message.content
                     await websocket.send_text(text)
                 socket_open = False
 
@@ -277,7 +274,54 @@ async def use_camera_detection(websocket: WebSocket):
         else : print("In RuntimeError exception block:", e)
         
 
+class MulOutfitsException(Exception):
+    pass
+
+
+def use_model_photo(file_bytes: bytes):
+    img = Image.open(BytesIO(file_bytes))
+    arr = np.asarray(img)
+
+    detections = get_detections(arr)
+
+    outfit = []
+    detected_groups = {}
+    for bbox, _, _, _, _, class_dict in detections:
+        obj_name = class_dict['class_name']
+        group = clothing_groups[obj_name]
+        
+        if group not in detected_groups:
+            if group == 'top' or group == 'bottom':
+                detected_groups['dress'] = True
+
+            elif group == 'dress':
+                detected_groups['top'] = True
+                detected_groups['bottom'] = True
+
+            detected_groups[group] = True
+
+            isolated_object = get_isolated_object(bbox, arr)
+            color = get_object_color(isolated_object)
+        
+            outfit.append({'class name': obj_name, 'color': color})
+
+        else : raise MulOutfitsException()
+
+    return outfit
+
+
+@app.post("/upload-photo/")
+async def use_photo_detection(file: bytes=File(...)):
+    try: 
+        outfit = use_model_photo(file)
+        recs = get_gpt_response(outfit)
+        text = recs.choices[0].message.content if recs else "- **No outfit detected**: Ensure photo has clothing in it."
+
+    except MulOutfitsException as e : text = "- **Multiple outfits detected**: Photo can only contain one outfit in it to ensure accurate results."
+        
+    finally : return {"text": text}
 
 
 if __name__ == '__main__':
+    # fastapi run main.py --port 8080
     uvicorn.run(app, port=8080, host='0.0.0.0')

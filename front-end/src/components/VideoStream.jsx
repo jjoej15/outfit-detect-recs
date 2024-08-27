@@ -133,8 +133,8 @@ function VideoStream(props) {
     return(
         <div className="video-stream">            
             <video ref={videoRef} id="video" style={{display: "none"}} />
-            {!detectionsCompleted && <canvas ref={canvasRef} className="canvas" />}
-            <canvas ref={virtualCanvasRef} className='virtual-canvas' style={{display: "none"}} />
+            {!detectionsCompleted && <canvas ref={canvasRef} className="stream-canvas" />}
+            <canvas ref={virtualCanvasRef} className='stream-virtual-canvas' style={{display: "none"}} />
 
             {displaying &&
                 <div className='process-status'>

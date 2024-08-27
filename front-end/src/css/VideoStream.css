@@ -1,4 +1,4 @@
-.canvas {
+.stream-canvas {
     border-radius: 15px;
 }
 
@@ -36,4 +36,24 @@
 @keyframes spinner {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
+}
+
+@media all and (max-width: 665px) {
+    .stream-canvas {
+        width: 450px;        
+    }
+
+}
+
+@media all and (max-height: 590px) {
+    .stream-canvas {
+        height: 300px;        
+    }
+
+}
+
+@media all and (max-height: 380px) {
+    .stream-canvas {
+        height: 250px;        
+    }
 }

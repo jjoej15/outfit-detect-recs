@@ -79,7 +79,7 @@ body {
     transform: scale(1.035);
     cursor: pointer;
     transition: transform 0.1s ease-in; 
-  }
+}
 
 /* Media queries */
 @media all and (max-width: 1000px) {

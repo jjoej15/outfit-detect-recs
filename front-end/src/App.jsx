@@ -13,7 +13,7 @@ function App() {
   return (
     <div className='app'>
       {useCamera && <UseCamera setUseCamera={setUseCamera} />}
-      {usePhoto && <UsePhoto />}
+      {usePhoto && <UsePhoto setUsePhoto={setUsePhoto} />}
 
       {!useCamera && !usePhoto &&
         <div className='home'>
