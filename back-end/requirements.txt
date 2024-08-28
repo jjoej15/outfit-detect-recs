@@ -9,3 +9,4 @@ supervision==0.22.0
 ultralytics==8.2.68
 uvicorn==0.30.6
 python-multipart==0.0.9
+websockets==13.0

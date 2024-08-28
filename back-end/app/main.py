@@ -38,7 +38,9 @@ OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 
 origins = [
     "http://localhost:5173/",
-    "http://localhost:5173"
+    "http://localhost:5173",
+    "https://fitdetect.netlify.app/",
+    "https://fitdetect.netlify.app"
 ]
 
 app.add_middleware(
