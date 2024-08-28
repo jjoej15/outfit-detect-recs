@@ -1,0 +1,10 @@
+fastapi==0.112.2
+numpy==1.26.4
+openai==1.42.0
+opencv-python==4.10.0.84
+pillow==10.4.0
+python-dotenv==1.0.1
+scipy==1.14.1
+supervision==0.22.0
+ultralytics==8.2.68
+uvicorn==0.30.6
