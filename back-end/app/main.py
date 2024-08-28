@@ -25,7 +25,7 @@ from openai import OpenAI
 async def lifespan(app: FastAPI):
     # Loading model and using it on startup ensures app works efficiently
     global model
-    model = YOLO("best.pt")
+    model = YOLO("app/best.pt")
     dummy_frame = np.zeros((640, 480, 3), dtype=np.uint8)
     get_detections(dummy_frame)
     
