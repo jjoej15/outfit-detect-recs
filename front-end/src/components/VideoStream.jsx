@@ -1,5 +1,6 @@
 import { useRef, useEffect, useState } from 'react';
 import PropTypes from 'prop-types';
+
 import "../css/VideoStream.css" 
 
 function VideoStream(props) {
@@ -10,15 +11,15 @@ function VideoStream(props) {
         props.setCameraErr
     ];
 
+    const [displaying, setDisplaying] = useState(false);
+    const [detectionsCompleted, setDetectionsCompleted] = useState(false);
+
     const canvasRef = useRef(null);
     const videoRef = useRef(null);
     const virtualCanvasRef = useRef(null);
-    const [displaying, setDisplaying] = useState(false);
-    const [detectionsCompleted, setDetectionsCompleted] = useState(false);
     const socketRef = useRef(null);
     
     useEffect(() => { // Connecting to websocket and starting clothing detection
-        // setRecText(null)
         if (socketRef.current) {
             socketRef.current.close();
             console.log("Closing already open socket")
@@ -31,7 +32,7 @@ function VideoStream(props) {
         startDetections(video, canvas);
     }, [])
 
-    const displayDetections = async (video, canvas, imgBlob) => {
+    const displayDetections = async (video, canvas, imgBlob) => { // Displaying frames picked up from webcam except with detections/labels
         const ctx = canvas.getContext('2d');
         ctx.width = video.videoWidth;
         ctx.height = video.videoHeight;
@@ -72,14 +73,17 @@ function VideoStream(props) {
                         const ctx = virtualCanvas.getContext('2d');
                         ctx.drawImage(video, 0, 0);
                     
-                        if (socketRef.current.readyState === socketRef.current.OPEN) virtualCanvas.toBlob((blob) => socketRef.current.send(blob), 'image/jpeg');
+                        if (socketRef.current.readyState === socketRef.current.OPEN) {
+                            virtualCanvas.toBlob((blob) => socketRef.current.send(blob), 'image/jpeg'); // Sending frame bytes to back end                         
+                        }
 
                     } catch (e) {
-                        if (e instanceof TypeError) {
+                        if (e instanceof TypeError) { // Occurs when there's an issue with camera
                             socketRef.current.close();
                             setCameraErr(true);
                             console.error(e)
                             clearInterval(intervalId);
+                            
                         } else {
                             console.error(e)
                         }
@@ -91,8 +95,8 @@ function VideoStream(props) {
                     console.log(e.message);
                     setCameraErr(true);
                     socketRef.current.close();
+
                 } else {
-                    console.log('hi')
                     console.log(e);
                 }
             }
@@ -116,18 +120,20 @@ function VideoStream(props) {
         socketRef.current.addEventListener('close', async () => {
             clearInterval(intervalId);
             video.pause();
+
+            // Stopping camera from recording
             if (stream) {
                 stream.getTracks().forEach((track) => {
                     track.stop();
                 });
             }
+
             setVidDeviceId(null);
         })
     };
 
     const endStream = () => {
         socketRef.current.close();
-        // setVidDeviceId(null);
     }
 
     return(

@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+
 import UseCamera from './components/UseCamera';
 import UsePhoto from './components/UsePhoto';
 import githubLogo from './assets/github-mark.svg';
-import './css/App.css';
 
-// Favicon rgb val is (223, 52, 52)
+import './css/App.css';
 
 function App() {
   const [useCamera, setUseCamera] = useState(false);
@@ -15,6 +15,7 @@ function App() {
       {useCamera && <UseCamera setUseCamera={setUseCamera} />}
       {usePhoto && <UsePhoto setUsePhoto={setUsePhoto} />}
 
+      {/* Home page */}
       {!useCamera && !usePhoto &&
         <div className='home'>
           <h1 className='app-title'>FitDetect</h1>

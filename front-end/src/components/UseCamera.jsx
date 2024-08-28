@@ -1,18 +1,22 @@
 import { useState, useEffect, useRef } from "react";
-import VideoStream from "./VideoStream";
-import circleExclamationPng from '../assets/circle-exclamation.png';
 import PropTypes from 'prop-types';
-import '../css/UseCamera.css'
 import { nanoid } from 'nanoid';
 
+import VideoStream from "./VideoStream";
+import circleExclamationPng from '../assets/circle-exclamation.png';
+
+import '../css/UseCamera.css'
+
 function UseCamera(props) {
+    const setUseCamera = props.setUseCamera;
+
     const [videoDevices, setVideoDevices] = useState([]);
     const [vidDeviceId, setVidDeviceId] = useState(null);
     const [recText, setRecText] = useState();
     const [recs, setRecs] = useState();
     const [noCamera, setNoCamera] = useState(false);
     const [cameraErr, setCameraErr] = useState(false);
-    const setUseCamera = props.setUseCamera;
+
     const typewriteIntervalId = useRef(null);
 
     const startOver = () => {
@@ -41,7 +45,6 @@ function UseCamera(props) {
 
 
     const [displayRecs, setDisplayRecs] = useState();
-
     useEffect(() => { // Parsing recText and setting recs
         if (recText) {
             const bulletPoints = recText.split('- **').splice(1);
@@ -55,15 +58,16 @@ function UseCamera(props) {
         }
     }, [recText]);
 
-    const typewriteEffect = (intervalId) => {
-        let i = 0;
-        let j = 0;
-        let c = 0;
+    const typewriteEffect = (intervalId) => { // Creates typewriter effect for recommendation text using setInterval
+        let i = 0; // Represents index in recs
+        let j = 0; // Represents index in list at recs[i]
+        let c = 0; // Represents index in string at recs[i][j]
 
         intervalId.current = setInterval(() => {
             if (i < recs.length) {
                 if (j < recs[0].length) {
                     if (c < recs[i][j].length) {
+                        // Added character at recs[i][j][c] to displayRecs. displayRecs is then re-rendered on screen.
                         setDisplayRecs(displayRecs.map((r) => {
                             if (r[j] === displayRecs[i][j]) {
                                 r[j] += recs[i][j][c];
@@ -91,7 +95,7 @@ function UseCamera(props) {
         }, 8);
     };
 
-    useEffect(() => {
+    useEffect(() => { // Once recs are gathered and parsed, start displaying them using typewriter effect
         if (displayRecs && displayRecs[0][0] === '') {
             typewriteEffect(typewriteIntervalId);
             
@@ -129,7 +133,7 @@ function UseCamera(props) {
             }
 
             {vidDeviceId && 
-                <VideoStream vidDeviceId={vidDeviceId} setVidDeviceId={setVidDeviceId} setRecText={setRecText} setCameraErr={setCameraErr}/>
+                <VideoStream vidDeviceId={vidDeviceId} setVidDeviceId={setVidDeviceId} setRecText={setRecText} setCameraErr={setCameraErr} />
             }  
 
             {cameraErr && // Screen that appears when camera can't pick up video
@@ -164,7 +168,6 @@ function UseCamera(props) {
 
             {recs && <button className='btn' id="use-camera-btn" onClick={startOver}>Use Camera Again</button>}         
             {recs && <button className='btn' id="use-camera-btn" onClick={() => setUseCamera(false)}>Home</button>}
-               
         </div>
     );
 }

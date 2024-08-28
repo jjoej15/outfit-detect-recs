@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import PropTypes from 'prop-types'
-import '../css/UsePhoto.css'
-
 import { nanoid } from 'nanoid';
+
+import '../css/UsePhoto.css'
 
 function UsePhoto(props) {
     const setUsePhoto = props.setUsePhoto;
@@ -24,7 +24,7 @@ function UsePhoto(props) {
         clearInterval(typewriteIntervalId.current);
     }
 
-    useEffect(() => {
+    useEffect(() => { // Setting img source to user-uploaded file
         if (file) {
             const reader = new FileReader();
             reader.readAsDataURL(file);
@@ -32,13 +32,11 @@ function UsePhoto(props) {
             
             reader.addEventListener("load", () => {
                 imgRef.current.src = reader.result;
-                // setImgLoaded(true);
             });
         }
     }, [file])
 
     const [displayRecs, setDisplayRecs] = useState();
-
     useEffect(() => { // Parsing recText and setting recs
         if (recText) {
             setLoadingRecs(false);
@@ -54,15 +52,16 @@ function UsePhoto(props) {
         }
     }, [recText]);
 
-    const typewriteEffect = (intervalId) => {
-        let i = 0;
-        let j = 0;
-        let c = 0;
+    const typewriteEffect = (intervalId) => { // Creates typewriter effect for recommendation text using setInterval
+        let i = 0; // Represents index in recs
+        let j = 0; // Represents index in list at recs[i]
+        let c = 0; // Represents index in string at recs[i][j]
 
         intervalId.current = setInterval(() => {
             if (i < recs.length) {
                 if (j < recs[0].length) {
                     if (c < recs[i][j].length) {
+                        // Added character at recs[i][j][c] to displayRecs. displayRecs is then re-rendered on screen.
                         setDisplayRecs(displayRecs.map((r) => {
                             if (r[j] === displayRecs[i][j]) {
                                 r[j] += recs[i][j][c];
@@ -90,7 +89,7 @@ function UsePhoto(props) {
         }, 8);
     };
 
-    useEffect(() => {
+    useEffect(() => { // Once recs are gathered and parsed, start displaying them using typewriter effect
         if (displayRecs && displayRecs[0][0] === '') {
             typewriteEffect(typewriteIntervalId);
             
@@ -99,7 +98,7 @@ function UsePhoto(props) {
 
     }, [displayRecs])
 
-    const handleSubmit = async () => {
+    const handleSubmit = async () => { // Sends uploaded file in POST request to back end. Then handles outfit recs from back end.
         setLoadingRecs(true);
         const formData = new FormData();
         formData.append("file", file);

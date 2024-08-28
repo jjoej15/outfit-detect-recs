@@ -2,7 +2,8 @@ import os
 
 image_dir_path = 'data/images'
 image_dirs = os.listdir(image_dir_path)
-image_ids = {image_id[:-4] for image_id in os.listdir(image_dir_path + '/' + image_dirs[0]) + os.listdir(image_dir_path + '/' + image_dirs[1])}
+image_files = os.listdir(image_dir_path + '/' + image_dirs[0]) + os.listdir(image_dir_path + '/' + image_dirs[1])
+image_ids = {image_file[:-4] for image_file in image_files}
 print(f'Found {len(image_ids)} images.')
 
 label_dir_path = 'data/labels'

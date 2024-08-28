@@ -20,6 +20,7 @@ import supervision as sv
 
 from openai import OpenAI
 
+# Initializing app
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Loading model and using it on startup ensures app works efficiently
@@ -34,7 +35,6 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 load_dotenv()
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
-
 
 origins = [
     "http://localhost:5173/",
@@ -68,6 +68,10 @@ clothing_groups = {
 
 # Code for this function was written by Peter Hansen at https://stackoverflow.com/a/3244061 but slightly modified for my use case
 def get_object_color(frame: np.ndarray):
+    '''
+        Takes in NumPy array representing image and returns string representing RGB value of most dominant color in image
+    '''
+
     # Reading image
     img = Image.fromarray(frame)
     img = img.resize((150, 150)) # Resizing to reduce time
@@ -85,6 +89,9 @@ def get_object_color(frame: np.ndarray):
 
 
 def get_detections(arr: np.ndarray):
+    '''
+        Takes in NumPy array representing image and returns Detections object encapsulating clothing detections. 
+    '''
     result = model(arr, agnostic_nms=True, verbose=False)[0]
     detections = sv.Detections.from_ultralytics(result)
     detections = detections[detections.confidence >= .4]
@@ -93,6 +100,11 @@ def get_detections(arr: np.ndarray):
 
 
 def get_isolated_object(bbox, frame):
+    '''
+        Takes in tuple representing bounding box of object and NumPy array representing full image.
+        Returns NumPy array representing image cropped to be just the object in bounding box.
+    '''
+
     x1, y1, x2, y2 = bbox
     isolated_object = frame[int(y1):int(y2), int(x1):int(x2)]
 
@@ -100,6 +112,11 @@ def get_isolated_object(bbox, frame):
 
 
 def get_gpt_response(outfit: list[dict]):
+    '''
+        Takes in list representing clothing pieces in outfit and returns completion response from OpenAI's gpt-4o-mini LLM model
+        giving recommendations to improve outfit.
+    '''
+
     if len(outfit) == 0 : return None
 
     client = OpenAI(api_key=OPENAI_API_KEY)
@@ -140,12 +157,16 @@ def get_gpt_response(outfit: list[dict]):
 
 
 def get_recs(detections_dict):
+    '''
+        Takes in dict representing all clothing detected and returns string representing recommendations from OpenAI's gpt-4o-mini LLM model
+    '''
+
     objects_detected = [
         (
             class_name, 
-            detections_dict[class_name]['conf'], 
-            detections_dict[class_name]['img'], 
-            detections_dict[class_name]['detection count']
+            detections_dict[class_name]['conf'], # Highest confidence level detected
+            detections_dict[class_name]['img'], # NumPy array representing frame where highest confidence level was detected
+            detections_dict[class_name]['detection count'] # Number of times object was detected
         ) 
         for class_name in detections_dict
     ]
@@ -157,14 +178,18 @@ def get_recs(detections_dict):
     )
 
     outfit = []
-    detected_groups = {}
+    detected_groups = {} # Will represent the clothing groups that were detected
     for obj_name, _, img, _ in objects_detected:
         group = clothing_groups[obj_name]
-        if group not in detected_groups:
+
+        # Ensuring that > 1 item per clothing group isn't included in final outfit.
+        # This is necessary so that if model incorrectly predicts an object for only a few frames
+        # we won't consider it to be apart of the outfit.
+        if group not in detected_groups: 
             if group == 'top' or group == 'bottom':
-                detected_groups['dress'] = True
+                detected_groups['dress'] = True # Since user likely won't be wearing both a top/bottom and a dress
             elif group == 'dress':
-                detected_groups['top'] = True
+                detected_groups['top'] = True 
                 detected_groups['bottom'] = True
             detected_groups[group] = True
 
@@ -172,10 +197,16 @@ def get_recs(detections_dict):
             outfit.append({'class name': obj_name, 'color': color})
 
     recs = get_gpt_response(outfit)
-    return recs
+    return recs.choices[0].message.content
 
 
 async def use_model_webcam(websocket: WebSocket, queue: asyncio.Queue, detections_dict: dict):
+    '''
+        Takes in WebSocket object, asyncio queue, and dict to represent clothing detected when using webcam.
+        Makes clothing predictions on incoming frames from WebSocket and sends back frames with labels/bounding boxes included.
+        After a single object is detected 300 times, gets outfit recommendations and sends them back to front end through WebSocket.
+    '''
+
     socket_open = True
     box_annotator = sv.BoundingBoxAnnotator(
         thickness=2
@@ -183,7 +214,8 @@ async def use_model_webcam(websocket: WebSocket, queue: asyncio.Queue, detection
     label_annotator = sv.LabelAnnotator()
 
     while True:
-        bytes = await queue.get()
+        # Getting bytes representing frame from WebSocket and decoding them into NumPy array
+        bytes = await queue.get() 
         arr = np.frombuffer(bytes, dtype=np.uint8)
         frame = cv2.imdecode(arr, 1)
 
@@ -209,13 +241,16 @@ async def use_model_webcam(websocket: WebSocket, queue: asyncio.Queue, detection
                 detections_dict[class_name]['img'] = isolated_object
 
             detections_dict[class_name]['detection count'] += 1
+
+            # Once an object has been detected 300 times, assuming app has been given enough to time to get
+            # a good sense of what the user is wearing, so ending process and getting recommendations.
             if detections_dict[class_name]['detection count'] >= 300:
                 if str(websocket.application_state) == "WebSocketState.CONNECTED":
                     await websocket.send_text("Detections completed.")
 
                     recs = get_recs(detections_dict)
-                    text = recs.choices[0].message.content
-                    await websocket.send_text(text)
+                    await websocket.send_text(recs)
+
                 socket_open = False
 
         if socket_open:
@@ -237,6 +272,10 @@ async def use_model_webcam(websocket: WebSocket, queue: asyncio.Queue, detection
 
 
 async def receive(websocket: WebSocket, queue: asyncio.Queue):
+    '''
+        Takes in WebSocket and asyncio queue and putting incoming frames into queue.
+    '''
+
     bytes = await websocket.receive_bytes()
     
     try:
@@ -247,16 +286,23 @@ async def receive(websocket: WebSocket, queue: asyncio.Queue):
 
 @app.websocket("/webcam/")
 async def use_camera_detection(websocket: WebSocket):
+    '''
+        Accepts websocket connection and creates asyncio task to use YOLO model with web camera.
+        Sends outfit recommendations.
+    '''
+
     await websocket.accept()
     queue = asyncio.Queue(maxsize=10)
     detections_dict = {}
     detect_task = asyncio.create_task(use_model_webcam(websocket, queue, detections_dict))
+
+    # Common errors that occur that can be ignored
     common_errs = [
         "Unexpected ASGI message 'websocket.close', after sending 'websocket.close' or response already completed.",
         'Cannot call "send" once a close message has been sent.',
-        # 'Task exception was never retrieved',
         'WebSocket is not connected. Need to call "accept" first.'
     ]
+
     try:
         while True:
             await receive(websocket, queue)
@@ -275,11 +321,18 @@ async def use_camera_detection(websocket: WebSocket):
         
 
 class MulOutfitsException(Exception):
+    '''
+        Exception that is raised when multiple outfits are detected in single image.
+    '''
     pass
 
 
-def use_model_photo(file_bytes: bytes):
-    img = Image.open(BytesIO(file_bytes))
+def use_model_photo(image_bytes: bytes):
+    '''
+        Takes in bytes representing image and returns dict representing outfit detected in image.
+    '''
+
+    img = Image.open(BytesIO(image_bytes))
     arr = np.asarray(img)
 
     detections = get_detections(arr)
@@ -290,8 +343,11 @@ def use_model_photo(file_bytes: bytes):
         obj_name = class_dict['class_name']
         group = clothing_groups[obj_name]
         
+        # Ensuring that > 1 item per clothing group isn't included in final outfit.
+        # This is necessary because if model predicts > 1 item in same clothing group, there is likely > 1 people wearing
+        # outfits in image and thus app can't give accurate recommendations. 
         if group not in detected_groups:
-            if group == 'top' or group == 'bottom':
+            if group == 'top' or group == 'bottom': # Since user likely won't be wearing both a top/bottom and a dress
                 detected_groups['dress'] = True
 
             elif group == 'dress':
@@ -312,12 +368,17 @@ def use_model_photo(file_bytes: bytes):
 
 @app.post("/upload-photo/")
 async def use_photo_detection(file: bytes=File(...)):
+    '''
+        Takes in image file and uses YOLO model to predict outfit in image. Sends back outfit recommendations.
+    '''
+
     try: 
         outfit = use_model_photo(file)
         recs = get_gpt_response(outfit)
         text = recs.choices[0].message.content if recs else "- **No outfit detected**: Ensure photo has clothing in it."
 
-    except MulOutfitsException as e : text = "- **Multiple outfits detected**: Photo can only contain one outfit in it to ensure accurate results."
+    except MulOutfitsException: 
+        text = "- **Multiple outfits detected**: Photo can only contain one outfit in it to ensure accurate results."
         
     finally : return {"text": text}
 

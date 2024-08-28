@@ -38,11 +38,17 @@
     100% { transform: rotate(360deg); }
 }
 
+/* Media queries */
 @media all and (max-width: 665px) {
     .stream-canvas {
         width: 450px;        
     }
+}
 
+@media all and (max-width: 475px) {
+    .stream-canvas {
+        width: 100%;        
+    }
 }
 
 @media all and (max-height: 590px) {
