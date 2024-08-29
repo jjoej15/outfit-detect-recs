@@ -1,5 +1,6 @@
 # Results from model training
 data-processing/train/*.png
+!data-processing/train/results.png
 data-processing/train/labels_correlogram.jpg
 data-processing/train/results.csv
 

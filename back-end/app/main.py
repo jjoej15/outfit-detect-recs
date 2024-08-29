@@ -256,6 +256,7 @@ async def use_model_webcam(websocket: WebSocket, queue: asyncio.Queue, detection
                 socket_open = False
 
         if socket_open:
+            # Annotating detections
             frame = box_annotator.annotate(
                 scene=frame, 
                 detections=detections
@@ -266,6 +267,7 @@ async def use_model_webcam(websocket: WebSocket, queue: asyncio.Queue, detection
                 labels=labels
             )
 
+            # Encoded annotated frame into bytes and sending back to front end
             encoded_bytes = cv2.imencode('.jpg', frame)[1].tobytes()
             
             await websocket.send_bytes(encoded_bytes)

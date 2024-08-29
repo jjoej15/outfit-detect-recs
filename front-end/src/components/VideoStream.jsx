@@ -27,7 +27,7 @@ function VideoStream(props) {
 
         const video = videoRef.current;
         const canvas = canvasRef.current;
-        socketRef.current = new WebSocket("ws://localhost:8080/webcam/");
+        socketRef.current = new WebSocket("wss://outfit-detect-recs-production.up.railway.app/webcam/");
         
         startDetections(video, canvas);
     }, [])
@@ -53,8 +53,8 @@ function VideoStream(props) {
                     audio: false, 
                     video: {
                         deviceId: vidDeviceId,
-                        width: { max: 640 },
-                        height: { max: 480 }
+                        width: { max: 320 },
+                        height: { max: 240 }
                     }
                 });
 
@@ -104,10 +104,8 @@ function VideoStream(props) {
         
         socketRef.current.addEventListener('message', (m) => {
             if (typeof m.data == "string") {
-                if (m.data === "Detections completed.") {
+                if (m.data !== "Detections completed.") {
                     setDetectionsCompleted(true);
-
-                } else {
                     setRecText(m.data);
                     socketRef.current.close();
                 }
@@ -137,15 +135,19 @@ function VideoStream(props) {
     }
 
     return(
-        <div className="video-stream">            
+        <div className="video-stream">    
+            {displaying && !detectionsCompleted &&
+                <p>Step back from camera to detect entire outfit. Video resolution reduced to decrease latency.</p>
+            }
+
             <video ref={videoRef} id="video" style={{display: "none"}} />
             {!detectionsCompleted && <canvas ref={canvasRef} className="stream-canvas" />}
             <canvas ref={virtualCanvasRef} className='stream-virtual-canvas' style={{display: "none"}} />
 
-            {displaying &&
+            {displaying && !detectionsCompleted &&
                 <div className='process-status'>
                     <div className="loading" />
-                    <p>{!detectionsCompleted ? "Detecting outfit" : "Getting Recommendations"}</p>
+                    <p>Detecting outfit</p>
                 </div>    
             }                
 

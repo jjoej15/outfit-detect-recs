@@ -108,7 +108,7 @@ function UsePhoto(props) {
             body: formData
         }
 
-        const response = await (await fetch("http://localhost:8080/upload-photo/", options)).json();
+        const response = await (await fetch("https://outfit-detect-recs-production.up.railway.app/upload-photo/", options)).json();
         setRecText(response.text);
     }
 

@@ -8,8 +8,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libgl1 \
         libglib2.0-0 
 
-RUN pip install "fastapi[all]"
-
 RUN pip install --no-cache-dir --upgrade -r /back-end/requirements.txt
 
 COPY ./app /back-end/app
