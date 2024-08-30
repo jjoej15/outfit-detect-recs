@@ -23,6 +23,7 @@ Web app and fashion detection/recommendation engine that leverages deep learning
 - Determined the dominant color of each piece using a k-means clustering algorithm from [SciPy](https://scipy.org/) in order to get a better idea of what the user's outfit looks like.
 - Engineered prompts to feed to the gpt-4o-mini model through OpenAI's API to ensure consistent format and helpful outfit recommendations.
 - Configured a WebSocket to stream frames captured on webcam from front end to back end and stream frames with labels/bounding boxes drawn back simultaneously. This way the user can see what objects the model is detecting in real-time.
+- Maintaining low latency between the front end and back end proved to be difficult once I deployed my API to Railway, but I was able to subjugate it by lowering the resolution and frame rate of the video on the front end. 
 - Added feature to allow user-uploaded photos to get outfit recommendations for as well.
 
 ## Technologies Used
